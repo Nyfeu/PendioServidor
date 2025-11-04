@@ -1,34 +1,13 @@
 /**********************************************************************************************************************************************************
 
-
 Projeto Pendio - SW Release para campo
 Eng. Nuncio Perrella, MSc
 Data:  26 de  Abril 2026
-
-Histórico de gravação:
-
-Pendio 1  - Sistema de Testes POLI Civil - Kaiene
-Pendio 2  - Caixa de testes - Geólogos _ Igor
-Pendio 3  - Arnaldo
-Pendio 4  - USP
-PEndio 5  - A ser instalado
-Pendio 6  - A ser instalado  (Teste Nuncio 14/11/2024)
-Pendio 7  - Raia Olimpica USP
-Pendio 8  - Raia Olimpica USP
-Pendio 9  - Sensor  14/11/2024
  
- Linha 23 Arquivo Pendio_Lora_Wemos_Robocore.h --> Tempo de amostragem
- #define CFM_TIMEOUT_VALUE      180000      --> 180000 = 3 minutos
-
-
-
+  Linha 23 Arquivo Pendio_Lora_Wemos_Robocore.h --> Tempo de amostragem
+  #define CFM_TIMEOUT_VALUE      180000      --> 180000 = 3 minutos
 
 **********************************************************************************************************************************************************/
-
-
-
-
-
 
 /*
   Pendio LoRa Robocore / Smart Modular Module Handling based on Wemos D1 R32 board
@@ -44,11 +23,6 @@ Pendio 9  - Sensor  14/11/2024
 #include "Pendio_Sensor.h"
 #include "Pendio_LoRa_Wemos_Robocore_001.h"
 */
-
-
-
-
-
 
 #define MAIN
 // Naldo
@@ -81,29 +55,7 @@ uint16_t State = STATE_NOT_JOINED;                                // initialize 
 
 // DEVEUI = 000516800010C813 - Taken from Read DevEUI @ shield Robocore in use - USE ALWAYS THE NATIVE <DEVEUI> FROM THE MODULE
 
-//const char APPEUI[] = "91f26ac8101960cd";                             // Geovista Lora 1     Nuncio-      // AppEUI taken from the original code from Pendio - USE THE <APPEUI> FROM THE APPLICATION    
-//const char APPEUI[] = "e66394a311509218";                             // Geovista Lora 2                  // AppEUI taken from the original code from Pendio - USE THE <APPEUI> FROM THE APPLICATION
-//const char APPEUI[] = "404e5f22284448be";                             // Geovista Lora 3  Arnaldo         // AppEUI taken from the original code from Pendio - USE THE <APPEUI> FROM THE APPLICATION
-//const char APPEUI[] = "0595fa4a769c7dc5 ";                            // Geovista Lora 4                  // AppEUI taken from the original code from Pendio - USE THE <APPEUI> FROM THE APPLICATION
-//const char APPEUI[] = "b7eee2c39324aff9 ";                            // Geovista Lora 5                  // AppEUI taken from the original code from Pendio - USE THE <APPEUI> FROM THE APPLICATION
-//const char APPEUI[] = "6eded0607cbf53d9";                             // Geovista Lora 6 Nuncio           // AppEUI taken from the original code from Pendio - USE THE <APPEUI> FROM THE APPLICATION
-//const char APPEUI[] = "df74b1f32166838d";                             // Geovista Lora 7  Raia USP        // AppEUI taken from the original code from Pendio - USE THE <APPEUI> FROM THE APPLICATION
-//const char APPEUI[] =  "703dbc674b94cd49";                            // Geovista Lora 8  Raia USP        // AppEUI taken from the original code from Pendio - USE THE <APPEUI> FROM THE APPLICATION
-//const char APPEUI[] =  "47977eb3f7e148aa";                            // Geovista Lora 9                  // AppEUI taken from the original code from Pendio - USE THE <APPEUI> FROM THE APPLICATION
-//const char APPEUI[] =  "49550531869e88a2";                            // Geovista Lora 10   13012025      // AppEUI taken from the original code from Pendio - USE THE <APPEUI> FROM THE APPLICATION
 const char APPEUI[] =  "26e7cc9af428bec1";                                              // Geovista Lora 11   14012025      // AppEUI taken from the original code from Pendio - USE THE <APPEUI> FROM THE APPLICATION
-
-
-//const char APPKEY[] = "f8cbc1a1cfe91d411a5e06a468b6e4b7";             // Geovista Lora 1  Nuncio          // AppKey taken from the original code from Pendio - USE THE <APPKEY> FROM THE APPLICATION
-//const char APPKEY[] = "4b1f19db16953304b591fa5b8aaf4d49";             // Geovista Lora 2                  // AppKey taken from the original code from Pendio - USE THE <APPKEY> FROM THE APPLICATION
-//const char APPKEY[] = "ff507ae40f58b99737875697836b1d2e";             // Geovista Lora 3  Arnaldo         // AppKey taken from the original code from Pendio - USE THE <APPKEY> FROM THE APPLICATION
-//const char APPKEY[] = "de3ecca1db9df57bbfbb1e3a35949c3e";             // Geovista Lora 4                  // AppKey taken from the original code from Pendio - USE THE <APPKEY> FROM THE APPLICATION
-//const char APPKEY[] = "9603df9ec74ef4fc0ded843fb6890ab9";             // Geovista Lora 5                  // AppKey taken from the original code from Pendio - USE THE <APPKEY> FROM THE APPLICATION
-//const char APPKEY[] = "97c1f395db0955ef90ca5d30331d5151";             // Geovista Lora 6 Nunccio          // AppKey taken from the original code from Pendio - USE THE <APPKEY> FROM THE APPLICATION
-//const char APPKEY[] = "921277b1f387e530ba365cddbb0a5a35";             // Geovista Lora 7 Raia USP         // AppKey taken from the original code from Pendio - USE THE <APPKEY> FROM THE APPLICATION
-//const char APPKEY[] = "7ccfd7c7bc02911864f778187b191bd8";             // Geovista Lora 8 Raia USP         // AppKey taken from the original code from Pendio - USE THE <APPKEY> FROM THE APPLICATION
-//const char APPKEY[] = "1facfc3ba59d9710067e99f206b3f3a1";             // Geovista Lora 9                  // AppKey taken from the original code from Pendio - USE THE <APPKEY> FROM THE APPLICATION
-//const char APPKEY[] = "ee8c1ed049b073b184fd0fa840d11a45";             // Geovista Lora 10  13012025       // AppKey taken from the original code from Pendio - USE THE <APPKEY> FROM THE APPLICATION
 const char APPKEY[] = "cfeebad46ac8638d69fa23c5789926f3";               // Geovista Lora 11  14012025       // AppKey taken from the original code from Pendio - USE THE <APPKEY> FROM THE APPLICATION
 
 
