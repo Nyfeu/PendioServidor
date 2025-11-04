@@ -4,3 +4,5 @@
 .vscode/launch.json
 .vscode/ipch
 .vscode
+docs/CHAVES.md
+include/credentials.h
