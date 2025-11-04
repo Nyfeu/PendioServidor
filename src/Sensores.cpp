@@ -1,0 +1,398 @@
+/*
+  --------------------------------------------------------------------------------
+                                                              Início: 29/11/2023
+        Proj.:  WCPendio - Sistema de monitoramento de Taludes e Encostas
+        Fonte:  Sensores.cpp
+        Progs:  Eng. Prof. Nuncio Perrella, MSc e Arnaldo
+        Descr.: Funções de tratamento dos sensores
+                Varredura Sensores T,M,S (SPendio)
+                                                              Última: 16/12/2023
+  --------------------------------------------------------------------------------
+        Diario de Bordo
+        ---------------
+  28/11/2023 - Campeonato brasileiro 2023 : Vasco 2 x 4 Corinthians
+  29/11/2023 - Fragmentação em arquivos
+  15/12/2023 - Sensor de pressão
+  15/12/2023 - Sensor de bateria
+  16/12/2023 - Sensor de chuva
+
+*/
+
+#include "Aplic.h"
+
+const uchar TabHexa[] = {"0123456789ABCDEF"};
+char inputBuffer[32];
+int16_t contChuva;
+static t_eChuvaEstado eChuvaEstado = E_CHUVA_REPOUSO;
+static uint cdeb;                           // contador debounce
+TaskHandle_t taskScanSensorHandle = NULL;
+TaskHandle_t taskVarreSensorChuvaHandle = NULL;
+
+
+//------------------------------------------------------------------------------
+//  iniSensores - Inicializa sensores
+//
+void iniSensores(CPendio_Sensor_Data_Type &dado) {
+  dado.frmFmtV[0] = '0';                  // Frame Format Version 0x01
+  dado.frmFmtV[1] = '1';
+  contChuva = 0;                          // Inicializa contador de chuva
+  g_bDiag = false;                            // Modo diagnóstico desativado
+  xTaskCreate(vTaskVarreSensorChuva, "SENSOR CHUVA", configMINIMAL_STACK_SIZE + 1024, NULL, 1, &taskVarreSensorChuvaHandle);
+  eChuvaEstado = E_CHUVA_INICIA;
+}
+
+//------------------------------------------------------------------------------
+//  vTaskVarreSensorChuva - Task de Varredura do Sensor de chuva
+//
+void vTaskVarreSensorChuva(void *pvParameters)
+{
+  int cont = 0;
+  TickType_t xLastWakeTime;
+  xLastWakeTime = xTaskGetTickCount();
+  while (1)
+  {
+    switch (eChuvaEstado) {
+      case E_CHUVA_REPOUSO:
+        break;
+      case E_CHUVA_INICIA:
+        cdeb = DEBDmax;
+        eChuvaEstado = E_CHUVA_TEM;
+        break;
+      case E_CHUVA_TEM:                         // Tem chuva?
+        if (!temChuva()) {
+          if (cdeb) cdeb--;                     // não, aguarda depressionar
+          else desWLED();
+        }
+        else {
+          if (!cdeb) {
+            cdeb = DEBPmax;                     // Sim há uma possibilidade de Chuva...
+            eChuvaEstado = E_CHUVA_ESTAB;
+          }
+          else cdeb = DEBDmax;                  // Ruído, reinicia debouncing
+        }
+        break;
+      case E_CHUVA_ESTAB:                       // Chuva estável?
+        if (temChuva()) {
+          if (cdeb) cdeb--;                     // aguarda debouncing
+          else {
+            ligWLED();
+            eChuvaEstado = E_CHUVA_ANALISE;     // Sim...
+          }
+        }
+        else {
+          cdeb = DEBPmax;                       // Ruído, reinicia debouncing
+        }
+        break;
+      case E_CHUVA_ANALISE:
+        if (temChuva()) {
+          cdeb++;
+        }
+        else {
+          if (cdeb > TEMPO_DIAG) g_bDiag = true;  // Modo diagnóstico
+          else contChuva++;                       // incrementa contador
+          eChuvaEstado = E_CHUVA_INICIA;          // reinicia...
+        }
+        break;
+    }
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1));
+  }
+}
+
+//------------------------------------------------------------------------------
+//      int16Hex - Converte int8 em ASCII Hexa
+//
+void int16Hex(int16_t c, char *p) {
+  uchar b;
+  b = c >> 8;
+  *p = Nib(b / 16);
+  p++;
+  *p = Nib(b % 16);
+  p++;
+  b = (char)c;
+  *p = Nib(b / 16);
+  p++;
+  *p = Nib(b % 16);
+}
+
+//------------------------------------------------------------------------------
+//      int8Hex - Converte int8 em ASCII Hexa
+//
+void int8Hex(int8_t c, char *p) {
+  *p = Nib(c / 16);
+  p++;
+  *p = Nib((c & 0x0f));
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      leSenChuva - le Sensor de Chuva
+//
+void leSenChuva(char *p) {
+  //contChuva++;
+  int16Hex(contChuva, p);
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      leSenBateria - le Sensor de Bateria
+//
+void leSenBateria(char *p) {
+  uchar b, c;
+  int16_t vBat;
+  int32_t soma=0;
+  for (int i = 0; i < 8; i++) {
+    soma += analogReadMilliVolts(aVBat);
+    delay(1);                           // 1 ms
+  }
+  vBat = int16_t(soma >> 3);                   // média de 8
+  if (vBat > 4095) vBat = 4095;                // limita 4095 (12 bits) 
+  Serial.print(vBat); Serial.print(" VBAT: "); Serial.print(FATOR_VBAT * vBat); Serial.println(" mV");
+//  vBat /= 10;                                  // desconsidera uma casa decimal
+  b = (uchar) vBat;
+  vBat = vBat >> 8;
+  *p     =   TabHexa[vBat & 0x0f];
+  *(p + 1) = TabHexa[(b >> 4) & 0x0f];
+  *(p + 2) = TabHexa[b & 0x0f];
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      mostraBufferLora - mostra Buffer LoRa
+//
+void mostraBufferLora(CPendio_Sensor_Data_Type &dado) {
+  Serial.println(dado.bytes_B);
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      mostraVetorAscii - mostra um vetor ASCII
+//
+void mostraVetorAscii(char *p, char tam) {
+  for (int i = 0; i < tam; i++) {
+    Serial.print(*p);
+  }
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      leSenTempUmid - le Sensor Temperatura e Umidade
+//
+void leSenTempUmid(char *t, char *u) {
+  sensors_event_t humidity, temperature;
+  uchar tempC;
+  int8_t umid;
+
+  if (aht.getEvent(&humidity, &temperature)) {
+    tempC = (char) temperature.temperature;
+    umid  = (char) humidity.relative_humidity;
+    //Serial.print("\n  ");
+    Serial.print(tempC); Serial.print("*C  ");
+    Serial.print(umid);  Serial.println("%");
+  }
+  else {
+    tempC = -100;
+    umid = 0;
+    Serial.print("\n  ");
+    Serial.print((uchar)tempC); Serial.print("*C  ");
+    Serial.print(umid);  Serial.println("%");
+    Serial.print("\n Humidity and temperature read fail!\n");
+  }
+  *t       = TabHexa[(tempC >> 4) & 0x0f];
+  *(t + 1) = TabHexa[(tempC & 0x0f)];
+  *u       = TabHexa[(umid >> 4) & 0x0f];
+  *(u + 1) = TabHexa[(umid & 0x0f)];
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      leSenTempPress - le Sensor Temperatura e Pressao
+//
+void leSenTempPress(char *p) {
+  int32_t pressao;
+  uchar b, c;
+
+  if (g_bBMPPresente) {
+    Serial.print(F("Temperature = "));
+    Serial.print(bmp.readTemperature());
+    Serial.println(" *C");
+
+    pressao = (uint32_t)bmp.readPressure();
+    Serial.print(F("Pressure = "));
+    Serial.print(pressao);
+    Serial.println(" Pa");
+
+    Serial.print(F("Approx altitude = "));
+    Serial.print(bmp.readAltitude(1013.25)); /* Adjusted to local forecast! */
+    Serial.println(" m");
+
+    c = (char) pressao;
+    pressao = pressao >> 8;
+    b = (char) pressao;
+    pressao = pressao >> 8;
+    *p     = TabHexa[pressao & 0x0f];
+    *(p + 1) = TabHexa[(b >> 4) & 0x0f];
+    *(p + 2) = TabHexa[b & 0x0f];
+    *(p + 3) = TabHexa[(c >> 4) & 0x0f];
+    *(p + 4) = TabHexa[c & 0x0f];
+  }
+  else {
+    Serial.print("\n Temperatura e Pressao falha!\n");
+    *p     = '0';
+    *(p + 1) = '0';
+    *(p + 2) = '0';
+    *(p + 3) = '0';
+    *(p + 4) = '0';
+  }
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      zeraBufferLora - zera Buffer LoRa
+//
+void zeraBufferLora(char *p, int tam) {
+  for (int i = 0; i < tam; i++) {
+    *p = '0';
+    p++;
+  }
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      bufferLora - Monta Buffer LoRa
+//
+void bufferLora(char *p, int tam) {
+  for (int i = 0; i < tam; i++) {
+    if (inputBuffer[i] != ',') {
+      *p = inputBuffer[i];
+      p++;
+    }
+  }
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      convHStrHInt - Converte string Hexa para int
+//
+int convHStrInt(char *p, char tam) {
+  int k, num, r, d;
+  r = 0;
+  d = tam - 1;
+  for (k = 0; k < tam; k++) {
+    num = *p - '0';
+    if (num > 9) num = num - 7;
+    num = num << ( d << 2);
+    r = r + num;
+    d--;
+    p++;
+  }
+  return r;
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      mostraSenSPendio - Mostra Sensores SPendio
+//
+void mostraSenSPendio(char s) {
+  char *p;
+  int16_t num;
+  int32_t solo;
+
+  p = inputBuffer;
+  Serial.print("Sensor "); Serial.println(s);
+  Serial.println(inputBuffer);
+
+  num = convHStrInt(p, 3);                          // x
+  Serial.print(num); Serial.print(',');
+
+  p += 4;
+  num = convHStrInt(p, 3);                          // y
+  Serial.print(num); Serial.print(',');
+
+  p += 4;
+  num = convHStrInt(p, 3);                          // z
+  Serial.print(num); Serial.print(',');
+
+  p += 4;
+  solo = convHStrInt(p, 5);                         // solo
+  Serial.println(solo);
+}
+
+//------------------------------------------------------------------------------
+//  rs485_TX - Habilita Transmissão RS485
+//
+void rs485_TX(void) {
+  digitalWrite(nRE, HIGH);
+  digitalWrite(pDE, HIGH);
+}
+
+//------------------------------------------------------------------------------
+//  rs485_RX - Habilita Recepção RS485
+//
+void rs485_RX(void) {
+  digitalWrite(pDE, LOW);
+  digitalWrite(nRE, LOW);
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      leSenSPendio - le Sensor SPendio
+//
+bool leSenSPendio(char sensor) {
+  int timeout, num;
+  rs485_TX();
+  //delay(10);
+  Serial2.write(sensor);
+  Serial2.flush();
+  rs485_RX();
+  timeout = SPENDIO_TIMEOUT;
+  while (timeout) {
+    if (Serial2.available() > 0) {
+      num = Serial2.readBytesUntil(LF, inputBuffer, sizeof(inputBuffer));
+      return true;
+      break;
+    }
+    delay(10);
+    timeout--;
+  }
+  return false;
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      varrSensoresSPendio - Varre Sensores SPendio
+//
+void varrSensoresSPendio(CPendio_Sensor_Data_Type &dado) {
+  if (leSenSPendio('S')) {                    // Sensor SPendio S
+    mostraSenSPendio('S');
+    bufferLora(dado.bytes_B, 17);
+  }
+  else {
+    zeraBufferLora(dado.bytes_B, 14);
+  }
+
+  if (leSenSPendio('M')) {                    // Sensor SPendio M
+    mostraSenSPendio('M');
+    bufferLora(dado.bytes_M, 17);
+  }
+  else {
+    zeraBufferLora(dado.bytes_M, 14);
+  }
+
+  if (leSenSPendio('T')) {                    // Sensor SPendio T
+    mostraSenSPendio('T');
+    bufferLora(dado.bytes_T, 17);
+  }
+  else {
+    zeraBufferLora(dado.bytes_T, 14);
+  }
+}
+
+//-----------------------------------------------------------------------------------------------------
+//      varrSensores - Varre Sensores
+//
+void varrSensores(CPendio_Sensor_Data_Type &dado) {
+  ligLLED();
+
+  varrSensoresSPendio(dado);                  // Sensores SPendio
+
+  leSenTempUmid(dado.temp, dado.umid);        // Sensores de temperatura e umidade
+
+  leSenTempPress(dado.pressao);               // Sensores de temperatura e pressão
+
+  leSenChuva(dado.pluv);                      // Sensor de chuva
+
+  leSenBateria(dado.bat);                     // Sensor de bateria
+
+  dado.final = 0;                             // Finalizador
+
+  //mostraBufferLora(dado);
+  desLLED();
+}
