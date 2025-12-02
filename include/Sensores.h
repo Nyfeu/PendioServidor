@@ -1,3 +1,14 @@
+/**
+ * @file Sensores.h
+ * @brief Definições e estruturas para gestão de sensores do Projeto Pendio.
+ * * @details Este ficheiro contém as estruturas de dados para o payload LoRaWAN
+ * e a classe de gestão dos sensores AHT, BMP e RS485.
+ * * @author Eng. Nuncio Perrella, MSc
+ * * @author Eng. André Maiolini
+ * * @author Eng. Arnaldo
+ * * @copyright Copyright (c) 2025 - Todos os direitos reservados.
+ */
+
 #ifndef _SENSORES_H
 #define _SENSORES_H
 

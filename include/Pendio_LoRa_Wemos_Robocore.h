@@ -31,16 +31,6 @@
 #define LORA_FIXED_DR                2                      // In case ADR is disabled, use fixed DR specified here
 #define LORA_ADR_ON               true                      // Define if Adaptive Data Rate is in use
 
-// Exception Handling defines
-#define ERROR_MAX_SEQ                5                      // Max number of Unexplained errors before a restart
-#define ERROR_RESTART                0                      // No Error, so restart counter
-#define ERROR_LORAWAN                1                      // Error cause was in LoRaWAN
-#define RESTART_REQUEST              2                      // Explicit Restart Request (immediate)
-
-#define STATE_NOT_JOINED              0                     // During Startup and until Join Accept arrives
-#define STATE_READY                   1                     // After Join Accept is received OR after TX + RX happened ok
-#define STATE_WAIT_CFM                2                     // After Sent message, wait for confirmation
-
 //Non Volatile Memory (EEPROM)
 #define NVM_SETTINGS_CFM_BIT       0x01                     // Define for the first bit of Settings in EEPROM
 
