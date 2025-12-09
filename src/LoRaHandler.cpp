@@ -1,7 +1,6 @@
 /**
  * @file LoRaHandler.cpp
  * @brief Implementação do handler de comunicação LoRaWAN
- * @author Eng. Nuncio Perrella, MSc
  * @copyright Copyright (c) 2025
  */
 

@@ -2,7 +2,6 @@
  * @file Pendio_LoRa_Wemos_Robocore.h
  * @brief Constantes de hardware do sistema Pendio
  * @details Define pinos e mapeamento de hardware
- * @author Eng. Nuncio Perrella, MSc
  * @copyright Copyright (c) 2025
  *
  * @note Configurações de software estão em config.h
