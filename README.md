@@ -11,20 +11,6 @@ O sistema realiza a leitura de diversos sensores e envia os dados consolidados v
 - **Versão do SW**: WRCPendio Wemos Robocore CPendio (10/01/2024)
 - **Autores**: Eng. Nuncio Perrella, MSc e Arnaldo
 
---- 
-
-## 🚀 Quick Start
-
-```bash
-git clone https://github.com/Nyfeu/PendioServidor.git
-cd PendioServidor
-cp include/credentials.example.h include/credentials.h
-# Editar include/credentials.h com suas chaves LoRa
-platformio run                  # Compilar
-platformio run --target upload  # Upload
-platformio device monitor       # Monitor Serial
-```
-
 ---
 
 ## ⚡ Hardware Principal
@@ -75,18 +61,16 @@ PendioServidor/
 
 ## 📖 Documentação
 
-| Arquivo | Para... |
+| Arquivo | Informações |
 |---------|---------|
-| **QUICK_START.md** | Começar em 5 min |
-| **ARCHITECTURE.md** | Entender o design |
-| **HANDLERS.md** | Usar/estender handlers |
-| **docs/HARDWARE.md** | Pinos e conexões |
-| **docs/PROTOCOLO.md** | Formato de mensagens |
-| **BUILD_FIX_SUMMARY.md** | Histórico de correções |
+| [**docs/ARCHITECTURE.md**](./docs/ARCHITECTURE.md) | Entender o design |
+| [**docs/HANDLERS.md**](./docs/HANDLERS.md)| Usar/estender handlers |
+| [**docs/HARDWARE.md**](./docs/HARDWARE.md)| Pinos e conexões |
+| [**docs/PROTOCOLO.md**](./docs/PROTOCOLO.md) | Formato de mensagens |
 
 ---
 
-## 👾 Como Compilar 
+## 👾 Upload do Projeto 
 
 Instale o Visual Studio Code com a extensão PlatformIO e clone este repositório:
 
@@ -97,6 +81,16 @@ git clone https://github.com/Nyfeu/PendioServidor.git
 Crie o ficheiro `include/credentials.h` com as chaves LoRaWAN corretas (ver `include/credentials.h.exemplo`).
 
 Use o ambiente PIO (PlatformIO) para compilar e gravar o firmware no hardware.
+
+```bash
+git clone https://github.com/Nyfeu/PendioServidor.git
+cd PendioServidor
+cp include/credentials.example.h include/credentials.h
+# Editar include/credentials.h com suas chaves LoRa
+platformio run                  # Compilar
+platformio run --target upload  # Upload
+platformio device monitor       # Monitor Serial
+```
 
 ---
 
