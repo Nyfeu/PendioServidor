@@ -2,7 +2,6 @@
  * @file LoRaHandler.h
  * @brief Handler de comunicação para LoRaWAN (SMW_SX1262M0)
  * @details Implementa a interface CommunicationHandler para LoRaWAN
- * @author Eng. Nuncio Perrella, MSc
  * @copyright Copyright (c) 2025
  */
 
