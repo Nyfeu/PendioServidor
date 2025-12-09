@@ -3,7 +3,6 @@
  * @brief Handler de comunicação para Wi-Fi (exemplo de implementação)
  * @details Implementa a interface CommunicationHandler para comunicação via Wi-Fi
  * @note Esta é uma estrutura de exemplo - implementação completa requer biblioteca Wi-Fi
- * @author Eng. Nuncio Perrella, MSc
  * @copyright Copyright (c) 2025
  */
 
