@@ -1,12 +1,17 @@
 # 📡 Pendio - Monitoramento de Taludes com LoRaWAN
 
-Firmware profissional para **ESP32 + LoRaWAN** com logging estruturado, sensores ambientais e comunicação modular.
-
-**Versão**: v2.0 (Refatorado)  
-**Autores**: Eng. Nuncio Perrella, MSc e Arnaldo  
-**Data**: Abril 2025
+Este repositório contém o firmware para o sistema de monitoramento de taludes e encostas "Pendio", baseado na placa Wemos D1 R32 (ESP32) e no módulo LoRaWAN Robocore (SMW_SX1262M0).
 
 ---
+
+## 📝 Sobre o Projeto
+
+O sistema realiza a leitura de diversos sensores e envia os dados consolidados via rede LoRaWAN.
+
+- **Versão do SW**: WRCPendio Wemos Robocore CPendio (10/01/2024)
+- **Autores**: Eng. Nuncio Perrella, MSc e Arnaldo
+
+--- 
 
 ## 🚀 Quick Start
 
@@ -24,7 +29,16 @@ Veja **QUICK_START.md** para instruções detalhadas.
 
 ---
 
-## ⚡ Hardware
+## ⚡ Hardware Principal
+
+- **MCU**: Wemos D1 R32 (ESP32)
+- **LoRaWAN**: Módulo Robocore SMW_SX1262M0
+- **Sensores**:
+    - Sensores SPendio (comunicação RS485)
+    - Sensor de Temp/Umidade (AHT10/AHT20)
+    - Sensor de Pressão/Temp (BMP280)
+    - Sensor de Chuva (Contacto seco)
+    - Monitor de Bateria (Divisor de tensão)
 
 ```mermaid
 graph LR
@@ -38,17 +52,11 @@ graph LR
     A --> I["ADC<br/>(Bateria)"]
 ```
 
-| Componente | Interface | Função |
-|-----------|-----------|--------|
-| **AHT10/20** | I2C | Temperatura/Umidade |
-| **BMP280** | I2C | Pressão atmosférica |
-| **SPendio** | RS485 Modbus | Sensores customizados |
-| **Rain Gauge** | GPIO | Contador de chuva |
-| **Bateria** | ADC | Monitoramento de tensão |
+Para um detalhe completo do mapeamento de pinos, consulte [➡️ docs/HARDWARE.md](docs/HARDWARE.md).
 
-Detalhes em **docs/HARDWARE.md**.
+A descrição completa do formato da mensagem enviada via LoRaWAN está documentada em [➡️ docs/PROTOCOLO.md](docs/PROTOCOLO.md).
 
----
+--- 
 
 ## 📁 Estrutura
 
@@ -80,103 +88,51 @@ PendioServidor/
 
 ---
 
-## 🔧 Principais Features
+## 👾 Como Compilar 
 
-✅ **Logging Profissional**: Timestamps, níveis, tags estruturadas  
-✅ **LoRaHandler**: OTAA Join, CFM, ADR, Data Rate configurável  
-✅ **Sensores Integrados**: AHT, BMP280, RS485, Chuva, Bateria  
-✅ **Arquitetura Modular**: Padrão Strategy para fácil extensão  
-⏳ **WiFiHandler**: Estrutura pronta para implementação  
-⏳ **MockCommHandler**: Testes sem hardware  
+Instale o Visual Studio Code com a extensão PlatformIO e clone este repositório:
 
----
-
-## ✅ Status da Compilação
-
-```
-RAM:   6.8%  (22,420 / 327,680 bytes)
-Flash: 24.8% (325,273 / 1,310,720 bytes)
+```bash
+git clone https://github.com/Nyfeu/PendioServidor.git
 ```
 
-**Build**: ✅ SUCCESS  
-**Logger**: ✅ Implementado  
-**LoRaHandler**: ✅ Completo  
-**Sensores**: ✅ Integrados  
+Crie o ficheiro `include/credentials.h` com as chaves LoRaWAN corretas (ver `include/credentials.h.exemplo`).
+
+Use o ambiente PIO (PlatformIO) para compilar e gravar o firmware no hardware.
 
 ---
 
-## 📱 Exemplo de Uso
+## 🧾 Histórico de Instalações e Gravações
 
-```cpp
-#include "LoRaHandler.h"
-#include "Logger.h"
+| Unidade | Descrição |
+|---------|-----------|
+| Pendio 1 | Sistema de Testes POLI Civil - Kaiene |
+| Pendio 2 | Caixa de testes - Geólogos _ Igor |
+| Pendio 3 | Arnaldo |
+| Pendio 4 | USP |
+| Pendio 5 | A ser instalado |
+| Pendio 6 | A ser instalado (Teste Nuncio 14/11/2024) |
+| Pendio 7 | Raia Olimpica USP |
+| Pendio 8 | Raia Olimpica USP |
+| Pendio 9 | Sensor 14/11/2024 |
 
-LoRaHandler handler(loraConfig);
+## 🗝️ Chaves LoRaWAN (AppEUI e AppKey)
 
-void setup() {
-    Logger::begin(115200);
-    handler.begin();
-    handler.connect();  // OTAA Join
-    LOGI("SYSTEM", "Sistema pronto");
-}
+O histórico das chaves pode ser consultado em [➡️ docs/CHAVES.md](docs/CHAVES.md).
 
-void loop() {
-    handler.process();
-    
-    if (handler.isConnected()) {
-        uint8_t data[] = {0x01, 0x02, 0x03};
-        SendResult result = handler.send(1, data, 3);
-        
-        if (result == SendResult::SUCCESS) {
-            LOGI("COMM", "Dados enviados com sucesso");
-        }
-    }
-    
-    delay(1000);
-}
+Os valores de: `AppEUI`e `AppKey` deve ser atualizado em `include\credentials.h` seguindo:
+```c
+#ifndef _CREDENTIALS_H
+#define _CREDENTIALS_H
+
+const char APPEUI[] = "Valor do AppEUI aqui";
+const char APPKEY[] = "Valor do AppKEY aqui";
+
+#endif /* _CREDENTIALS_H */
 ```
 
-Mais exemplos em **docs/USAGE_EXAMPLES.md**.
+Conforme está em `include\credentials.example.h`. O passo a passo para a configuração:
+1. Copiar para `include\credentials.h`
+2. Substituir os valores corretos
 
----
-
-## 🔑 Configuração
-
-### Credenciais LoRa (include/credentials.h)
-
-```cpp
-const char APPEUI[] = "seu_appeui_aqui";
-const char APPKEY[] = "sua_appkey_aqui";
-```
-
-### Timeout e Retries (include/config.h)
-
-```cpp
-#define JOIN_TIMEOUT_VALUE 30000    // 30s
-#define CFM_TIMEOUT_VALUE 6000      // 6s
-```
-
----
-
-## 🛠️ Troubleshooting
-
-| Problema | Verificar |
-|----------|-----------|
-| Erro ao compilar | `platformio.ini` e dependências |
-| LoRa não conecta | Credenciais em `credentials.h` |
-| Sem logs | Baudrate Serial (115200) |
-| Sensor não responde | Conexão I2C/RS485 |
-
----
-
-## 📚 Aprender Mais
-
-1. Leia **QUICK_START.md** para começar
-2. Veja **ARCHITECTURE.md** para entender o design
-3. Estude **HANDLERS.md** para implementar extensões
-4. Consulte **docs/USAGE_EXAMPLES.md** para exemplos práticos
-
----
-
-**Autor**: Eng. Nuncio Perrella, MSc  
-**Licença**: Copyright (c) 2025
+--- 
