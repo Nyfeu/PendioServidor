@@ -25,8 +25,6 @@ platformio run --target upload  # Upload
 platformio device monitor       # Monitor Serial
 ```
 
-Veja **QUICK_START.md** para instruções detalhadas.
-
 ---
 
 ## ⚡ Hardware Principal
@@ -52,7 +50,7 @@ graph LR
     A --> I["ADC<br/>(Bateria)"]
 ```
 
-Para um detalhe completo do mapeamento de pinos, consulte [➡️ docs/HARDWARE.md](docs/HARDWARE.md).
+Para um detalhamento completo do mapeamento de pinos, consulte [➡️ docs/HARDWARE.md](docs/HARDWARE.md).
 
 A descrição completa do formato da mensagem enviada via LoRaWAN está documentada em [➡️ docs/PROTOCOLO.md](docs/PROTOCOLO.md).
 
