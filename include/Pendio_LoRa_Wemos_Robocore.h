@@ -1,52 +1,43 @@
-/*
-  Pendio LoRa Wemos + Robocore - Header File
-  2023-10-30 - Claudio Sonaglio
-*/
-#ifndef PendioLoRaWemosRobocore001_h
-#define PendioLoRaWemosRobocore001_h
+/**
+ * @file Pendio_LoRa_Wemos_Robocore.h
+ * @brief Constantes de hardware do sistema Pendio
+ * @details Define pinos e mapeamento de hardware
+ * @author Eng. Nuncio Perrella, MSc
+ * @copyright Copyright (c) 2025
+ *
+ * @note Configurações de software estão em config.h
+ */
+
+#ifndef _PENDIO_LORA_WEMOS_ROBOCORE_H
+#define _PENDIO_LORA_WEMOS_ROBOCORE_H
 
 #include <Arduino.h>
 
-//Specific Module Related Defines (USE WEMOS D1 R32 BOARD!!!)
-#define MODULE_LED_PIN               2                      // pin for Module Led (In this case here, Wemos D1 R32)
+// ============================================================================
+// HARDWARE - Mapeamento de Pinos (ESP32 DOIT DEVKIT V1)
+// ============================================================================
 
-//Operational defines
-//#define USE_EEPROM                                          // define here if EEPROM needs to be activated in final release
-//#define FAKE_JOIN
+/**
+ * @brief LED do módulo
+ * @details Usado para indicação visual de status do sistema
+ */
+#define MODULE_LED_PIN                  2
 
-//LoRaWAN Protocol related defines
-#define JOIN_TIMEOUT_VALUE       10000                      // [ms] (10 s) wait this time before any new Join Attempt (5-6s normal)
-//#define CFM_TIMEOUT_VALUE         8000                      // [ms] (8 s)  wait time for check if confirmation arrived (after Tx... 6s + 2s = 8s)
+// ============================================================================
+// Macros Utilitárias
+// ============================================================================
 
-                                                            // Tempo de transmissão LORA
+/**
+ * @brief Converte número (0-15) para dígito hexadecimal (0-9, A-F)
+ * @param x Valor 0-15
+ * @return Caractere '0'-'9' ou 'A'-'F'
+ *
+ * @note Útil para conversão de arrays de bytes para string hex
+ */
+#if !defined(Nib)
+#define Nib(x)  ((x > 9) ? ('A' + x - 0x0A) : ('0' + x))
+#endif
 
-#define CFM_TIMEOUT_VALUE      180000                     // 3min[ms] (8 s)  wait time for check if confirmation arrived (after Tx... 6s + 2s = 8s)                                                           
-//#define CFM_TIMEOUT_VALUE      1800000                      // 30min[ms] (8 s)  wait time for check if confirmation arrived (after Tx... 6s + 2s = 8s)
+#endif // _PENDIO_LORA_WEMOS_ROBOCORE_H
 
-#define NXTMSG_TIMEOUT_VALUE     20000                      // [ms] (20 s) wait time for the next uplink message
-//#define NXTMSG_TIMEOUT_VALUE     1800000                      // [ms] (20 s) wait time for the next uplink message
-#define LORA_MSG_MAX_LEN           100                      // Max number of bytes in a LoRaWAN Payload (being Pos 0 the MsgID)
-#define LORA_MAX_NACK                9                      // Max number of Nack attempts to restart next message
 
-#define LORA_FIXED_DR                2                      // In case ADR is disabled, use fixed DR specified here
-#define LORA_ADR_ON               true                      // Define if Adaptive Data Rate is in use
-
-//Non Volatile Memory (EEPROM)
-#define NVM_SETTINGS_CFM_BIT       0x01                     // Define for the first bit of Settings in EEPROM
-
-//General use macros
-#define Nib(x)      ((x > 9)?('A' + x - 0xa):('0' + x))
-
-//Data Types
-// DANGER!!! Max LoRaWAN message size (depending on LNS and device) can be considerably lower than 256...
-// Always be aware tha the size of this structure will define if data can be sent in only one message or split in parts
-/* Naldo
-typedef union _Pendio_LoRa_Sensor_Data_Type {
-    unsigned char Bytes[sizeof(Pendio_Sensor_Data_Type)];
-    Pendio_Sensor_Data_Type d;
-} Pendio_LoRa_Sensor_Data_Type;
-
-extern Pendio_LoRa_Sensor_Data_Type Pendio_LoRa_Sensor_Data;
-*/
-
-#endif // PendioLoRaWemosRobocore001_h

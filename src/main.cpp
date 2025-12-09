@@ -16,22 +16,11 @@ Data:  26 de  Abril 2025
 
 #define MAIN
 
-/* Informações adicionais *****************************************************************
-
-  - Os dados são enviados via LoRa a cada 3 minutos (180000 s),
-    conforme definido em CFM_TIMEOUT_VALUE.
-
-  - Pendio LoRa Robocore / Smart Modular Module Handling based on Wemos D1 R32 board
-    2023-10-30 - Claudio Sonaglio
-
-******************************************************************************************/
-
 // Headers Principais do Projeto
 
 #include <Arduino.h>
 #include <HardwareSerial.h>
 #include <EEPROM.h>
-#include <RoboCore_SMW_SX1262M0.h>
 
 // Headers de Configuração do Projeto
 
@@ -39,16 +28,34 @@ Data:  26 de  Abril 2025
 #include "config.h"
 #include "credentials.h"
 
+// Headers de Comunicação
+
+#include "CommunicationHandler.h"
+#include "LoRaHandler.h"
+#include "Logger.h"
+
 //*****************************************************************************************
 //  DEFINIÇÕES GLOBAIS, CONSTANTES E VARIÁVEIS
 //*****************************************************************************************
 
 // Interface Serial (Serial1 para o Módulo LoRa)
-HardwareSerial loraSerial(1);           
+HardwareSerial loraSerial(1);
 
-// Instância do driver LoRaWAN
-SMW_SX1262M0 lorawan(loraSerial);       
-CommandResponse response;               
+// Configuração do LoRa Handler
+LoRaConfig loraConfig = {
+    .serial = &loraSerial,
+    .appEUI = (const uint8_t*)APPEUI,
+    .appKey = (const uint8_t*)APPKEY,
+    .useConfirmation = false,  // Será atualizado pela EEPROM
+    .useADR = LORA_ADR_ON,
+    .fixedDR = LORA_FIXED_DR,
+    .joinTimeout = JOIN_TIMEOUT_VALUE,
+    .confirmTimeout = CFM_TIMEOUT_VALUE,
+    .maxRetries = 3
+};
+
+// Instância do handler de comunicação (pode ser trocada por WiFiHandler, etc)
+LoRaHandler* commHandler = nullptr;
 
 // Estrutura de Dados dos Sensores (Definida em Sensores.h/Aplic.h)
 CPendio_LoRa_Sensor_Data_Type CPendio_LoRa_Sensor_Data;
@@ -90,16 +97,14 @@ constexpr int ERROR_LORAWAN   = 1; // Erro de comunicação no LoRaWAN
 constexpr int RESTART_REQUEST = 2; // Solicitação remota de reinício (imediata)
 constexpr int ERROR_MAX_SEQ   = 5; // Máximo de erros antes do reset forçado
 
-//*****************************************************************************************
-//  PROTÓTIPOS DE FUNÇÕES AUXILIARES
-//*****************************************************************************************
+// ---------------------------------------------------------------------------
+// Protótipos - funções auxiliares (assinam com as implementações abaixo)
+// ---------------------------------------------------------------------------
+void ToggleLed(void);
+void exception_handling(int Exception_code);
+uint8_t Validate_Cycle_Time(uint8_t ct);
 
-// Funções auxiliares
-void toggleLed();
-void handleException(int exceptionCode);
-uint8_t validateCycleTime(uint8_t timeInMinutes);
-
-// Ponteiro para a função reset por software
+// Ponteiro para a função de reset (software)
 void (*reset_function)(void) = 0;
 
 //*****************************************************************************************
@@ -130,23 +135,24 @@ void exception_handling(int Exception_code) {
 
     case ERROR_LORAWAN:
       // Processa um erro adicional LoRaWAN
-      Serial.print("Error Code: ");
-      Serial.println(Exception_code);
+      LOGW("SYSTEM", "Error Code: %d", Exception_code);
       err_count++;
       // Caso o contador de erros exceder o limite de erros consecutivos, força reinício
-      if (err_count > ERROR_MAX_SEQ) { 
-        Serial.println("Forced Reset in 30s!!!"); 
-        delay(30000); 
-        reset_function(); 
+      if (err_count > ERROR_MAX_SEQ) {
+        LOGE("SYSTEM", "Forced Reset in 30s due to repeated LoRa errors");
+        delay(30000);
+        reset_function();
       }
       break;
 
     case RESTART_REQUEST:
-      Serial.println("Immediate Reset Requested - in 30s!!!"); delay(30000); reset_function();
+      LOGW("SYSTEM", "Immediate Reset Requested - rebooting in 30s");
+      delay(30000);
+      reset_function();
       break;
 
     default:
-      Serial.println("Undefined Exception - Ignore");
+      LOGW("SYSTEM", "Undefined Exception - ignored (%d)", Exception_code);
       break;
 
   }
@@ -204,8 +210,6 @@ uint8_t Validate_Settings(uint8_t st)
 //  SETUP
 //*****************************************************************************************
 void setup() {
-  char deveui[16];
-
   // 1. Inicialização do Hardware Básico
 
   // Configura os pinos (HW.cpp)
@@ -217,8 +221,8 @@ void setup() {
 
   // 2. Inicialização das Interfaces Seriais
 
-  // Comunicação UART para DEBUG
-  Serial.begin(115200);
+  // Inicializa logger (Serial)
+  Logger::begin(115200);
   
   // Comunicação UART para o módulo LoRa
   loraSerial.begin(9600, SERIAL_8N1, RXD1_LoRa, TXD1_LoRa);
@@ -231,15 +235,15 @@ void setup() {
   // 3. Inicialização dos Sensores I2C
   
   // Sensor AHT (Temp/Umid)
-  if (!aht.begin()) Serial.println("[ERRO] AHT10/20 não encontrado. Verifique conexões.");
-  else Serial.println("[INFO] AHT10/20 detectado.");
+  if (!aht.begin()) LOGE("SENSOR", "AHT10/20 não encontrado. Verifique conexões.");
+  else LOGI("SENSOR", "AHT10/20 detectado");
 
   // Sensor BMP (Pressão)
   if (!bmp.begin(END_BMP)) {
-    Serial.println("[ERRO] BMP280 não encontrado.");
+    LOGE("SENSOR", "BMP280 não encontrado");
     g_bBMPPresente = false;
   } else {
-    Serial.println("[INFO] BMP280 detectado.");
+    LOGI("SENSOR", "BMP280 detectado");
     // Configuração padrão de acordo com o datasheet
     bmp.setSampling(
       Adafruit_BMP280::MODE_NORMAL,     // Operating Mode. 
@@ -255,109 +259,56 @@ void setup() {
   delay(1000);
 
   // 4. Mensagem de Boas-vindas
-  Serial.println(F("\n=== PENDIO SERVIDOR - INICIANDO ==="));
-  Serial.print(F("Versão: ")); Serial.println(Versao);
-  Serial.print(F("Data:   ")); Serial.println(Data);
+  LOGI("SYSTEM", "=== PENDIO SERVIDOR - INICIANDO ===");
+  LOGI("SYSTEM", "Versão: %s", Versao);
+  LOGI("SYSTEM", "Data: %s", Data);
   
   // Inicializa estruturas de dados dos sensores
   iniSensores(CPendio_LoRa_Sensor_Data.d);
 
-  // 5. Configuração LoRaWAN
-  Serial.println(F("[LoRa] Inicializando módulo..."));
-  lorawan.reset();                                                  
-  //lorawan.set_debugger(&Serial); // quando debug é necessário -> substituir por macro (diretiva)
-  Serial.print("[LoRa] Frame size: ");
-  Serial.println(sizeof(CPendio_LoRa_Sensor_Data));
+  // 5. Configuração do Handler de Comunicação
+  LOGI("COMM", "Inicializando handler de comunicação...");
+  LOGI("COMM", "Frame size: %u", (unsigned)sizeof(CPendio_LoRa_Sensor_Data));
 
   // Carrega informações da EEPROM
   #ifdef USE_EEPROM
-    NVM_LoRaWAN_Cycle_Time = EEPROM.read(0);                          // NVM_LoRaWAN_Cycle_Time located in the first EEPROM byte in memory (in min)
-    NVM_LoRaWAN_Use_Cfm = (NVM_SETTINGS_CFM_BIT == (EEPROM.read(1) & NVM_SETTINGS_CFM_BIT));    // Boolean for the first bit of position 1
+    NVM_LoRaWAN_Cycle_Time = EEPROM.read(0);
+    NVM_LoRaWAN_Use_Cfm = (NVM_SETTINGS_CFM_BIT == (EEPROM.read(1) & NVM_SETTINGS_CFM_BIT));
   #else
-    NVM_LoRaWAN_Cycle_Time = 0;                                       // NVM_LoRaWAN_Cycle_Time only 1 min for debug
-    NVM_LoRaWAN_Use_Cfm = true;                                       // NVM_LoRaWAN_Use_Cfm can be changed here during debug
+    NVM_LoRaWAN_Cycle_Time = 0;
+    NVM_LoRaWAN_Use_Cfm = true;
   #endif
   NVM_LoRaWAN_Cycle_Time = Validate_Cycle_Time(NVM_LoRaWAN_Cycle_Time);
 
-  // Configuração e Join
-  Serial.println(F("--- SMW_SX1262M0 Uplink (OTAA) ---"));
-  response = lorawan.reset();
+  // Atualizar configuração com valores da EEPROM
+  loraConfig.useConfirmation = NVM_LoRaWAN_Use_Cfm;
 
-  // Reset Lógico
-  if(response == CommandResponse::OK){ Serial.println(F("[INFO] Reset OK")); }
-    else { Serial.println(F("[ERRO] Falha no Reset")); }
+  // Criar instância do handler LoRa
+  commHandler = new LoRaHandler(loraConfig);
 
-  // Leitura DevEUI
-  response = lorawan.get_DevEUI(deveui);
-  if(response == CommandResponse::OK){ Serial.print(F("[INFO] DevEUI: ")); Serial.write(deveui, 16); Serial.println(); }
-    else { Serial.println(F("[ERRO] Error getting the Device EUI")); }
-
-  // Configura Aplicação EUI
-  response = lorawan.set_AppEUI(APPEUI);
-  if(response == CommandResponse::OK){ Serial.print(F("[INFO] Application EUI set (")); Serial.write(APPEUI, 16); Serial.println(')'); }
-    else { Serial.println(F("[ERRO] Error setting the Application EUI")); }
-
-  // Configura a Application Key (APPKEY)
-  response = lorawan.set_AppKey(APPKEY);
-  if(response == CommandResponse::OK){ Serial.print(F("[INFO] Application Key set (")); Serial.write(APPKEY, 32); Serial.println(')'); }
-    else { Serial.println(F("[ERRO] Error setting the Application Key")); }
-
-  // Configura o JoinMode para OTAA
-  response = lorawan.set_JoinMode(SMW_SX1262M0_JOIN_MODE_OTAA);
-  if(response == CommandResponse::OK){ Serial.println(F("[INFO] Mode set to OTAA")); }
-    else { Serial.println(F("[ERRO] Error setting the join mode")); }
-
-  // Configura Confirmação LoRaWAN
-  if (true == NVM_LoRaWAN_Use_Cfm) {
-
-    // Configura a Confirmação para MODE ON
-    response = lorawan.set_CFM(SMW_SX1262M0_CFM_ON);
-    if(response == CommandResponse::OK) Serial.println(F("[INFO] Confirmation Mode ON"));
-    else Serial.println(F("[ERRO] Error setting confirmation mode on"));
-  
-  } else {
-
-    // Configura a Confirmação para MODE OFF  
-    response = lorawan.set_CFM(SMW_SX1262M0_CFM_OFF);
-    if(response == CommandResponse::OK) Serial.println(F("[INFO] Confirmation Mode OFF"));
-    else Serial.println(F("[ERRO] Error setting confirmation mode off"));
-  
+  // Inicializar handler
+  if (!commHandler->begin()) {
+    LOGE("COMM", "Falha ao inicializar handler de comunicação");
+    while(1) { delay(1000); }
   }
 
-  // Configura ADR (Adaptive Data Rate)
-  #if LORA_ADR_ON
-
-    // Configura ADR para MODE ON - ATIVO
-    response = lorawan.set_ADR(SMW_SX1262M0_ADR_ON);
-    if(response == CommandResponse::OK) Serial.println(F("[INFO] Turn ADR on"));
-    else Serial.println(F("[ERRO] Error enabling the ADR"));
-
-  #else
-
-    // Configura ADR para MODE OFF - DESABILITADO
-    response = lorawan.set_ADR(SMW_SX1262M0_ADR_OFF);
-    if(response == CommandResponse::OK) Serial.println(F("[INFO] Turn ADR off"));
-    else Serial.println(F("[ERRO] Error disabling the ADR"));
-
-    // Configura ADR para Data Rate Fixo (FIXED_DR) DEFAULT
-    response = lorawan.set_DR(LORA_FIXED_DR);
-    if(response == CommandResponse::OK){ 
-      Serial.print(F("[INFO] Set DR to ")); 
-      Serial.println(LORA_FIXED_DR); 
-    } else Serial.println(F("[ERRO] Error setting the datarate"));
-
-  #endif
-
-  // Salva as configurações do LoRaWAN (opcional)
-  response = lorawan.save();
-  if(response == CommandResponse::OK){ Serial.println(F("[INFO] Settings saved")); }
-  else Serial.println(F("[ERRO] Error on saving"));
+  // Obter DevEUI
+  char deveui[16];
+  if (commHandler->getDevEUI(deveui)) {
+    // Format DevEUI as hex string for readable log
+    char hexstr[33];
+    for (int i = 0; i < 16; ++i) {
+      sprintf(&hexstr[i*2], "%02X", (uint8_t)deveui[i]);
+    }
+    hexstr[32] = '\0';
+    LOGI("COMM", "DevEUI: %s", hexstr);
+  }
 
   // Inicia JOIN
-  delay(500); 
+  delay(500);
   ToggleLed();
-  Serial.println(F("[INFO] Primeira tentativa de conexão à rede (JOIN)..."));
-  lorawan.join();
+  LOGI("COMM", "Primeira tentativa de conexão à rede (JOIN)...");
+  commHandler->connect();
 
   // Define TIMERS iniciais
   timeout = millis() + JOIN_TIMEOUT_VALUE; // Timeout para o processo de Join
@@ -391,9 +342,8 @@ void setup() {
 ******************************************************************************************/
 void loop() {
   uint8_t x, byte;
-  char data[16];          // Buffer auxiliar para leitura de downlink
+  DownlinkMessage downlink;
   uint8_t port;
-  Buffer buffer;
 
   timenow = millis();     // sample running time only here for all uses (including future calculations)
   if(((unsigned long)(timeout - timenow))>((unsigned long)(-timecycle)))                    // compare if time has come, but also during passage through zero (each ~49..50 days)
@@ -404,13 +354,13 @@ void loop() {
 #ifdef FAKE_JOIN
         if(true) {
 #else
-        if(lorawan.isConnected()) {
+        if(commHandler->isConnected()) {
 #endif
-          if(!joined){ Serial.println(F("[INFO] Joined")); joined = true; }                        // print the "joined" message & set first message after Join to be sent
+          if(!joined){ LOGI("COMM", "Joined network"); joined = true; }                        // print the "joined" message & set first message after Join to be sent
           State = STATE_READY;
         } else {
-          Serial.println(F("[INFO] Another attempt to Join the network"));
-          lorawan.join();
+          LOGI("COMM", "Another attempt to Join the network");
+          commHandler->connect();
         }
         timecycle = JOIN_TIMEOUT_VALUE;                                                     // Joined or not, wait the shortest time to start something
       break;
@@ -434,75 +384,78 @@ void loop() {
 */
         varrSensores(CPendio_LoRa_Sensor_Data.d);     // Varre Sensores
         nack_count = 0;
-#if not LORA_ADR_ON 
-        response = lorawan.set_DR(LORA_FIXED_DR);                                           // set DR to default
-        if(response == CommandResponse::OK){ Serial.print(F("Set DR to ")); Serial.println(LORA_FIXED_DR); }
-          else { Serial.println(F("Error setting the datarate")); }
-#endif
-// Naldo
-//        Serial.print(F("Data: ")); Serial.println(data);
-//        response = lorawan.sendX(1, data);                                                  // Try to send the message in the vector...
-        Serial.print(F("Data: ")); Serial.println(CPendio_LoRa_Sensor_Data.Bytes);
-        response = lorawan.sendX(1, CPendio_LoRa_Sensor_Data.Bytes);                          // Try to send the message in the vector...
-        if(response == CommandResponse::OK) {
-//          State = STATE_AFTER_SEND;                                                         // Goes to After Send State and check what to do there
-          State = STATE_WAIT_CFM;                                                           // Goes to After Send State and check what to do there
-          timecycle = CFM_TIMEOUT_VALUE;                                                    // After a message has been accepted, wait for some time.
-          timenow = millis();                                                               // for TX resample running time
-          Serial.println("Tx Accepted");                                                    // Log that Tx was accepted
-//          exception_handling(CLEAR_ERRORS); }                                               // Clear Error counter
-          exception_handling(ERROR_RESTART); }                                               // Clear Error counter
-        else {
-          State = STATE_NOT_JOINED;                                                         // This should not happen... It was supposed to be ready... Go back to start
-          timecycle = JOIN_TIMEOUT_VALUE;                                                   // As if it was a Join process
-          Serial.println("Tx Denied ERROR - Restart Join");
-          exception_handling(ERROR_LORAWAN); }
+
+        // Enviar dados através do handler de comunicação
+        {
+          LOGD("COMM", "Data payload (len=%u)", (unsigned)sizeof(CPendio_LoRa_Sensor_Data));
+
+          SendResult sendResult = commHandler->send(1, (const uint8_t*)CPendio_LoRa_Sensor_Data.Bytes,
+                                                    sizeof(CPendio_LoRa_Sensor_Data));
+
+          if(sendResult == SendResult::SUCCESS) {
+            State = STATE_WAIT_CFM;                                                           // Aguarda confirmação
+            timecycle = CFM_TIMEOUT_VALUE;                                                    // After a message has been accepted, wait for some time.
+            timenow = millis();                                                               // for TX resample running time
+            LOGI("COMM", "Tx accepted (port=%d, len=%u)", 1, (unsigned)sizeof(CPendio_LoRa_Sensor_Data));
+            exception_handling(ERROR_RESTART);                                                // Clear Error counter
+          }
+          else if(sendResult == SendResult::PENDING) {
+            // Envio ainda pendente, manter estado
+            LOGW("COMM", "Tx pending");
+          }
+          else {
+            State = STATE_NOT_JOINED;                                                         // This should not happen... Go back to start
+            timecycle = JOIN_TIMEOUT_VALUE;
+            LOGE("COMM", "Tx denied - restarting join");
+            exception_handling(ERROR_LORAWAN);
+          }
+        }
       break;
-//      case STATE_AFTER_SEND:                                                                // After TX gets here to check what else to do
       case STATE_WAIT_CFM:                                                                  // After TX gets here to check what else to do
         if(true == NVM_LoRaWAN_Use_Cfm) {                                                   // If confirmation was expected...
-          if (lorawan.isConfirmed()) {                                                      // ...and message has been confirmed...
-            Serial.println("Ack received");
-//            exception_handling(CLEAR_ERRORS); }                                             // Clear Error counter
-            exception_handling(ERROR_RESTART); }                                             // Clear Error counter
-          else {
-            Serial.println("No Ack received!");
-            exception_handling(ERROR_LORAWAN); }                                            // Otherwise report error
-          response = lorawan.readX(port, buffer);                                           // ...try to read an eventually incoming message - check if a downlink has also been received
-          if(response == CommandResponse::OK) {
-            if(buffer.available()){                                                         // the buffer cannot empty for a valid message
-              Serial.print(F("Rx Message on port "));                                       // Message received!
-              Serial.println(port);
-              for(x=0; x<5; x++) {
-                data[x] = buffer.read(); }
-              // Hardcoded evaluation of downlink messages... 
-              if (data[0] == '8') {                                                         // 0x8n - Hardcoded - downlink message to evaluate
-                if ((data[1] == '0') && (data[4]==0x0)) {                                   // 0x81 0xCT - Hardcoded - update of the LoRaWAN Cycle Time
-                  NVM_LoRaWAN_Cycle_Time = (data[2]-'0')*16 + (data[3]-'0');                // (if needed in Base64 gAU= 5min gg== Restart Request
-                  Serial.print("New Cycle Time: ");
-                  NVM_LoRaWAN_Cycle_Time = Validate_Cycle_Time(NVM_LoRaWAN_Cycle_Time);     // Validate and store new value
-                  Serial.println(NVM_LoRaWAN_Cycle_Time); }
-                if ((data[1] == '2') && (data[2]==0x0)) {                                   // 0x82 - Restart Request
-                  exception_handling(RESTART_REQUEST); }
-                if ((data[1] == '4') && (data[4]==0x0)) {                                   // 0x84 0xNN - Confirmation required? X1 = true else X0 = false
-                  NVM_LoRaWAN_Use_Cfm = (NVM_SETTINGS_CFM_BIT == ((data[3]-'0') & NVM_SETTINGS_CFM_BIT));             // Set value of bit 0 of received Hex data
-                  Serial.print("New CFM: ");
-                  if (true == NVM_LoRaWAN_Use_Cfm) { Serial.println("true"); }
-                  else { Serial.println("false"); } }
-              }
-              ToggleLed();                                                                  // Signal through LED message received
-            }
-          } else {
-            Serial.println("No downlink message arrived until now");
+          if (commHandler->isConfirmed()) {                                                 // ...and message has been confirmed...
+            LOGI("COMM", "Acknowledgement received");
+            exception_handling(ERROR_RESTART);                                              // Clear Error counter
           }
+          else {
+            LOGW("COMM", "No acknowledgement received");
+            exception_handling(ERROR_LORAWAN);                                              // Otherwise report error
+          }
+          
+          // Tentar ler mensagem downlink
+          if(commHandler->receive(downlink) == ReceiveResult::MESSAGE_RECEIVED) {
+            LOGI("COMM", "Rx message received (port=%u, len=%u)", (unsigned)downlink.port, (unsigned)downlink.length);
+            
+            // Processar downlink (exemplo hardcoded)
+            if (downlink.length >= 5) {
+              // Hardcoded evaluation of downlink messages... 
+              if (downlink.data[0] == '8') {                                                // 0x8n - Hardcoded - downlink message to evaluate
+                if ((downlink.data[1] == '0') && (downlink.data[4]==0x0)) {                // 0x81 0xCT - update of the LoRaWAN Cycle Time
+                  NVM_LoRaWAN_Cycle_Time = (downlink.data[2]-'0')*16 + (downlink.data[3]-'0');
+                  NVM_LoRaWAN_Cycle_Time = Validate_Cycle_Time(NVM_LoRaWAN_Cycle_Time);
+                  LOGI("COMM", "New Cycle Time: %u", (unsigned)NVM_LoRaWAN_Cycle_Time);
+                }
+                if ((downlink.data[1] == '2') && (downlink.data[2]==0x0)) {                // 0x82 - Restart Request
+                  exception_handling(RESTART_REQUEST); 
+                }
+                if ((downlink.data[1] == '4') && (downlink.data[4]==0x0)) {                // 0x84 0xNN - Confirmation required?
+                  NVM_LoRaWAN_Use_Cfm = (NVM_SETTINGS_CFM_BIT == ((downlink.data[3]-'0') & NVM_SETTINGS_CFM_BIT));
+                  LOGI("COMM", "New CFM: %s", (true == NVM_LoRaWAN_Use_Cfm) ? "true" : "false");
+                }
+              }
+            }
+            ToggleLed();                                                                    // Signal through LED message received
+          } else {
+            LOGI("COMM", "No downlink message arrived");
+          }
+          
           State = STATE_READY;                                                              // Go back to restart the whole process
-// CCS          timecycle = NVM_LoRaWAN_Cycle_Time * 60000;                                     // ...wait complete cycle time to next message
-          timecycle = 20000;                                     // CCS - Hardcoded 20s
+          timecycle = 20000;                                                                // CCS - Hardcoded 20s
         } else {
-          timecycle = NXTMSG_TIMEOUT_VALUE;                                                 // ...next message in a shorter time
-          Serial.println("No Ack");
+          timecycle = NEXT_MSG_TIMEOUT_VALUE;                                               // ...next message in a shorter time
+          LOGW("COMM", "No Ack - will retry");
           nack_count++;
-          if (nack_count++ > LORA_MAX_NACK) {
+          if (nack_count++ > LORA_MAX_NACK_RETRIES) {
             nack_count = 0;
             State = STATE_READY;                                                            // Go back to restart the whole process
             exception_handling(ERROR_LORAWAN);

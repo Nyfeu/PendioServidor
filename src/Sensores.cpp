@@ -19,6 +19,7 @@
 */
 
 #include "Aplic.h"
+#include "Logger.h"
 
 const uchar TabHexa[] = {"0123456789ABCDEF"};
 char inputBuffer[32];
@@ -144,7 +145,7 @@ void leSenBateria(char *p) {
   }
   vBat = int16_t(soma >> 3);                   // média de 8
   if (vBat > 4095) vBat = 4095;                // limita 4095 (12 bits) 
-  Serial.print(vBat); Serial.print(" VBAT: "); Serial.print(FATOR_VBAT * vBat); Serial.println(" mV");
+  LOGD("SENSOR", "VBAT ADC=%d V=%ld mV", vBat, (long)(FATOR_VBAT * vBat));
 //  vBat /= 10;                                  // desconsidera uma casa decimal
   b = (uchar) vBat;
   vBat = vBat >> 8;
@@ -157,7 +158,7 @@ void leSenBateria(char *p) {
 //      mostraBufferLora - mostra Buffer LoRa
 //
 void mostraBufferLora(CPendio_Sensor_Data_Type &dado) {
-  Serial.println(dado.bytes_B);
+  LOGD("SENSOR", "%s", dado.bytes_B);
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -165,7 +166,7 @@ void mostraBufferLora(CPendio_Sensor_Data_Type &dado) {
 //
 void mostraVetorAscii(char *p, char tam) {
   for (int i = 0; i < tam; i++) {
-    Serial.print(*p);
+    LOGD("SENSOR", "%c", *p);
   }
 }
 
@@ -180,17 +181,14 @@ void leSenTempUmid(char *t, char *u) {
   if (aht.getEvent(&humidity, &temperature)) {
     tempC = (char) temperature.temperature;
     umid  = (char) humidity.relative_humidity;
-    //Serial.print("\n  ");
-    Serial.print(tempC); Serial.print("*C  ");
-    Serial.print(umid);  Serial.println("%");
+    LOGD("SENSOR", "%d*C %d%%", (int)tempC, (int)umid);
   }
   else {
     tempC = -100;
     umid = 0;
-    Serial.print("\n  ");
-    Serial.print((uchar)tempC); Serial.print("*C  ");
-    Serial.print(umid);  Serial.println("%");
-    Serial.print("\n Humidity and temperature read fail!\n");
+    LOGD("SENSOR", "Temperatura/Umidade não disponível");
+    LOGD("SENSOR", "%d*C %d%%", (int)tempC, (int)umid);
+    LOGW("SENSOR", "Humidity and temperature read fail");
   }
   *t       = TabHexa[(tempC >> 4) & 0x0f];
   *(t + 1) = TabHexa[(tempC & 0x0f)];
@@ -206,18 +204,12 @@ void leSenTempPress(char *p) {
   uchar b, c;
 
   if (g_bBMPPresente) {
-    Serial.print(F("Temperature = "));
-    Serial.print(bmp.readTemperature());
-    Serial.println(" *C");
+    LOGD("SENSOR", "Temperature = %.2f *C", bmp.readTemperature());
 
     pressao = (uint32_t)bmp.readPressure();
-    Serial.print(F("Pressure = "));
-    Serial.print(pressao);
-    Serial.println(" Pa");
+    LOGD("SENSOR", "Pressure = %lu Pa", (unsigned long)pressao);
 
-    Serial.print(F("Approx altitude = "));
-    Serial.print(bmp.readAltitude(1013.25)); /* Adjusted to local forecast! */
-    Serial.println(" m");
+    LOGD("SENSOR", "Approx altitude = %.2f m", bmp.readAltitude(1013.25));
 
     c = (char) pressao;
     pressao = pressao >> 8;
@@ -230,7 +222,7 @@ void leSenTempPress(char *p) {
     *(p + 4) = TabHexa[c & 0x0f];
   }
   else {
-    Serial.print("\n Temperatura e Pressao falha!\n");
+    LOGW("SENSOR", "Temperatura e Pressao falha!");
     *p     = '0';
     *(p + 1) = '0';
     *(p + 2) = '0';
@@ -288,23 +280,23 @@ void mostraSenSPendio(char s) {
   int32_t solo;
 
   p = inputBuffer;
-  Serial.print("Sensor "); Serial.println(s);
-  Serial.println(inputBuffer);
+  LOGD("SENSOR", "Sensor %d", s);
+  LOGD("SENSOR", "%s", inputBuffer);
 
   num = convHStrInt(p, 3);                          // x
-  Serial.print(num); Serial.print(',');
+  LOGD("SENSOR", "%d,", num);
 
   p += 4;
   num = convHStrInt(p, 3);                          // y
-  Serial.print(num); Serial.print(',');
+  LOGD("SENSOR", "%d,", num);
 
   p += 4;
   num = convHStrInt(p, 3);                          // z
-  Serial.print(num); Serial.print(',');
+  LOGD("SENSOR", "%d,", num);
 
   p += 4;
   solo = convHStrInt(p, 5);                         // solo
-  Serial.println(solo);
+  LOGD("SENSOR", "%d", solo);
 }
 
 //------------------------------------------------------------------------------
